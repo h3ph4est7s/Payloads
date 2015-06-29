@@ -23,7 +23,7 @@ void PREFIX_arp(char *argv,int argc)
     ArpTag *out = resulthole->result;
     int cnt = resulthole->counter;
     ArpTag *outobj;
-    FILE *fd = fdopen(newsockfd, "w");
+    FILE *fd = fdopen(dup(newsockfd), "w");
     ssize_t f = write(newsockfd,"Address    HWtype    HWaddress     Flags Mask      Iface\n",57);
     if (f <= 0)
     {
@@ -46,6 +46,7 @@ void PREFIX_arp(char *argv,int argc)
             return;
         }
         fflush(fd);
+        fclose(fd);
         free(resulthole->result);
         free(resulthole);
     }
@@ -188,14 +189,16 @@ int main( int argc, char *argv[] )
             perror("ERROR writing to socket");
             continue;
         }
-        FILE *fd = fdopen(newsockfd, "w");
+        FILE *fd = fdopen(dup(newsockfd), "w");
         n = PRINT_VERSION(fd)
         fflush(fd);
+        fclose(fd);
         if (n <= 0)
         {
             perror("ERROR writing to socket");
             continue;
         }
+
         while(true)
         {
             bzero(&buffer,256);
