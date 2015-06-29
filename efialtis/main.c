@@ -56,13 +56,13 @@ int cntargs(char *string)               //space delimited arguments counter
     char* pch;                          //delimited token pointer
     char* buffin;                       //temporary buffer to slice pointer
     int count = 0;                      //arguments counter
-    buffin = malloc(strlen(string)+1);  //allocate and zero-initiate a char array with size equals to input sting and each element have size of char after cast to char pointer
+    buffin = malloc(strlen(string)+1);  //allocate memory equal to length of string plus one
     if(buffin == NULL)                                     //if we cant allocate memory
     {
         perror("ERROR allocating memory");                 //print error message and
         exit(1);                                           //exit with status code 1
     }
-    strcpy(buffin,string);                 //copy contents of string limited by size of string to buffin
+    strcpy(buffin,string);                                 //copy contents of string limited by size of string to buffin
     pch = strtok(buffin," ");                              //slice the temporary buffer by space and then load the pointer of the first token to pch
     while (pch != NULL)                                    //iterate over pch until no more items
     {
