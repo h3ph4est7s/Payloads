@@ -45,11 +45,11 @@ void PREFIX_arp(char *argv,int argc)
             perror("ERROR writing to socket");
             return;
         }
-        fflush(fd);
-        fclose(fd);
-        free(resulthole->result);
-        free(resulthole);
     }
+    fflush(fd);
+    fclose(fd);
+    free(resulthole->result);
+    free(resulthole);
 }
 
 int cntargs(char *string)               //space delimited arguments counter
