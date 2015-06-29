@@ -3,5 +3,6 @@
 
 #define Efialtis_VERSION_MAJOR @Efialtis_VERSION_MAJOR@
 #define Efialtis_VERSION_MINOR @Efialtis_VERSION_MINOR@
-
+#define PRINT_VERSION(FD) \
+            fprintf(FD,"Version: %d.%d\n",Efialtis_VERSION_MAJOR,Efialtis_VERSION_MINOR);
 #endif //EFIALTIS_CONFIG_H

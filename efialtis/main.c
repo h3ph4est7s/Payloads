@@ -78,7 +78,7 @@ void my_switch(char *string)
 
     struct commandcase cases [] =
     {
-        { "exitexit", PREFIX_ext },
+        { "exit", PREFIX_ext },
         { "arp", PREFIX_arp }
     };
     char *e;
@@ -156,7 +156,7 @@ int main( int argc, char *argv[] )
     listen(sockfd,5);
     clilen = sizeof(cli_addr);
     bzero(&buffer,256);
-    char welcome[] = "Authentication: Success";
+    char welcome[] = "Authentication: Success\n";
     while(true)
     {
         /* Accept actual connection from the client */
@@ -183,6 +183,14 @@ int main( int argc, char *argv[] )
         }
         n = write(newsockfd, welcome, strlen(welcome));
 
+        if (n <= 0)
+        {
+            perror("ERROR writing to socket");
+            continue;
+        }
+        FILE *fd = fdopen(newsockfd, "w");
+        n = PRINT_VERSION(fd)
+        fflush(fd);
         if (n <= 0)
         {
             perror("ERROR writing to socket");
