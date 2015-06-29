@@ -1,0 +1,7 @@
+#ifndef EFIALTIS_CONFIG_H
+#define EFIALTIS_CONFIG_H
+
+#define Efialtis_VERSION_MAJOR @Efialtis_VERSION_MAJOR@
+#define Efialtis_VERSION_MINOR @Efialtis_VERSION_MINOR@
+
+#endif //EFIALTIS_CONFIG_H
