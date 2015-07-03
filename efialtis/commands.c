@@ -2,20 +2,19 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <dirent.h>
 #include "commands.h"
-
-
-
+#include "dbg.h"
 
 ArpResult* get_arp(char *argv,int argc)
 {
     char line[500];                         // create a temporary line with 500 bytes limit
     struct ArpTag *out, *temp;              // declare two pointer variables which is defined by the arp tag structure
-    static struct ArpResult result;         // declare a memory static variable which is defined by the arp result structure
+    struct ArpResult result;         // declare a memory static variable which is defined by the arp result structure
     FILE *fp = fopen("/proc/net/arp", "r"); // get a file pointer to arp table pseudo file
     fgets(line, sizeof(line), fp);          // Skip the first line (column headers).
     out = malloc(sizeof(ArpTag));           // allocate memory equal to the size of the arp tag
-    int count = 0;                          // declare the entries counter variable
+    unsigned int count = 0;                          // declare the entries counter variable
     bool firstrun = true;                   // define the first run variable for the loop below
     while(fgets(line, sizeof(line), fp))    // iterate through each line of the arp table
     {
@@ -50,4 +49,85 @@ ArpResult* get_arp(char *argv,int argc)
     ArpResult *out_result = malloc(sizeof(ArpResult));
     memcpy(out_result,&result,sizeof(ArpResult));
     return out_result;
+}
+int free_str_array(struct StringArray *array){
+    if(array == NULL){
+        return -1;
+    }
+    if(array->count == 0 || array->strings == NULL){
+        free(array);
+        return 0;
+    }
+    for(int firstIterate = 0;firstIterate < array->count;firstIterate++){
+        if (array->strings[firstIterate].string != NULL) {
+            free(array->strings[firstIterate].string);
+        }
+    }
+    free(array->strings);
+    free(array);
+    return 0;
+}
+struct StringArray * get_dir_list(char *argv,int argc){
+    DIR *d = NULL;
+    char dirnotfounderr[] = "Directory not found.";
+    struct StringArray *err;
+
+    if(argc == 0){
+        //get current direcotry
+        d = opendir(".");
+    }
+    else if(argc == 1)
+    {
+        d = opendir(argv);
+        check_dir_open(d);
+    }
+    else
+    {
+        return NULL;
+    }
+    struct StringArray *out = malloc(sizeof(struct StringArray));
+    check_mem(out);
+    struct dirent *dir;
+    unsigned int count = 0;
+    struct String *temp;
+    out->strings = malloc(sizeof(struct String));
+    check_mem(out->strings);
+    bool firstrun = true;
+    if (d)
+    {
+        out->count = 0;
+        while ((dir = readdir(d)) != NULL)
+        {
+            if(!firstrun){
+                temp = realloc(out->strings,sizeof(struct String)*(count+1));
+                check_mem(temp);
+                out->strings = temp;
+            }
+            size_t dirlen = strlen(dir->d_name);
+            out->strings[count].string = malloc(sizeof(char)*(dirlen+1));
+            check_mem(out->strings[count].string);
+            strcpy(out->strings[count].string,dir->d_name);
+            out->strings[count].length = (int) dirlen;
+            printf("%s\n", dir->d_name);
+            count++;
+            out->count++;
+            firstrun = false;
+        }
+        closedir(d);
+    }
+    return out;
+
+    error:
+        switch(errno){
+            case DIR_N_FOUND_ERROR:
+                check_mem(err = malloc(sizeof(struct StringArray)));
+                check_mem(err->strings = malloc(sizeof(struct String)));
+                err->count = 1;
+                check_mem(err->strings[0].string = malloc(sizeof(char) * (strlen(dirnotfounderr)+1)));
+                strcpy(err->strings[0].string,dirnotfounderr);
+                err->strings[0].length = (int) strlen(dirnotfounderr);
+                return err;
+        }
+        free_str_array(out);
+        return NULL;
 }

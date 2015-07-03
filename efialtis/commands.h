@@ -1,10 +1,11 @@
 #ifndef COMMANDS_H_INCLUDED
 #define COMMANDS_H_INCLUDED
 #define ARP_IP_SIZE 16
+#include <stdbool.h>
 
 typedef struct ArpTag
 {
-    char ip_address[ARP_IP_SIZE]; // Obviously more space than necessary, just illustrating here.
+    char ip_address[ARP_IP_SIZE]; 
     int hw_type;
     int flags;
     char mac_address[18];
@@ -15,9 +16,22 @@ typedef struct ArpTag
 typedef struct ArpResult
 {
     ArpTag* result;
-    int counter;
+    unsigned int counter;
 } ArpResult;
 
+struct String
+{
+    char *string;
+    int length;
+    bool freed;
+};
+struct StringArray{
+    struct String *strings;
+    int count;
+    bool freed;
+};
+struct StringArray * get_dir_list(char *argv,int argc);
 ArpResult* get_arp(char *argv,int argc);
+int free_str_array(struct StringArray *array);
 
 #endif // COMMANDS_H_INCLUDED

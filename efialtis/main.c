@@ -10,12 +10,29 @@
 #include "commands.h"
 #include "main.h"
 #include "config.h"
+#include "dbg.h"
 
 int sockfd, newsockfd;
 
 void PREFIX_ext(char *argv,int argc)
 {
     close(newsockfd);
+}
+
+void PREFIX_ls(char *argv,int argc)
+{
+    struct StringArray *result = get_dir_list(argv,argc);
+    check(result,"Empty result.");
+    for(int count=0; count < result->count;count++){
+        check_socket_write(write(newsockfd,result->strings[count].string,(size_t) result->strings[count].length));
+        check_socket_write(write(newsockfd,"\n",1));
+    }
+    free_str_array(result);
+    return;
+
+    error:
+        if(result) free_str_array(result);
+        return;
 }
 
 void PREFIX_arp(char *argv,int argc)
@@ -81,7 +98,8 @@ void my_switch(char *string)
     struct commandcase cases [] =
     {
         { "exit", PREFIX_ext },
-        { "arp", PREFIX_arp }
+        { "arp", PREFIX_arp },
+        { "ls", PREFIX_ls }
     };
     char *e;
     size_t index;
@@ -104,7 +122,7 @@ void my_switch(char *string)
     }
     else
     {
-        e = string;
+        e = NULL;
         command = string;
     }
 
@@ -112,8 +130,14 @@ void my_switch(char *string)
     {
         if( 0 == strcmp( pCase->string, command) )
         {
-            (*pCase->func)(e,cntargs(e));
-            break;
+            if(e == NULL){
+                (*pCase->func)(e,0);
+                break;
+            }
+            else {
+                (*pCase->func)(e, cntargs(e));
+                break;
+            }
         }
     }
     if(allocated) free(command);

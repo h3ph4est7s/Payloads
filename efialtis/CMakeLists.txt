@@ -16,6 +16,7 @@ set(SOURCE_FILES
     commands.h
     main.c
     main.h
-    config.h)
+    config.h
+    dbg.h)
 
 add_executable(efialtis ${SOURCE_FILES})
