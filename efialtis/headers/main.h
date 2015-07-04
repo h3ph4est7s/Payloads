@@ -8,5 +8,5 @@ struct commandcase                      //name to function iterate model
     char* string;                       //given command
     void (*func)(char*,int);            //matched function
 };
-FILE *fdopen (int __fd, __const char *__modes);
+extern FILE *fdopen (int __fd, __const char *__modes);
 #endif // MAIN_H_INCLUDED

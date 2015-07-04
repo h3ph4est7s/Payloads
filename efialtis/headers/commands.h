@@ -30,8 +30,8 @@ struct StringArray{
     int count;
     bool freed;
 };
-struct StringArray * get_dir_list(char *argv,int argc);
-ArpResult* get_arp(char *argv,int argc);
-int free_str_array(struct StringArray *array);
+extern struct StringArray * get_dir_list(char *argv,int argc);
+extern ArpResult* get_arp(char *argv,int argc);
+extern int free_str_array(struct StringArray *array);
 
 #endif // COMMANDS_H_INCLUDED
