@@ -16,18 +16,18 @@ typedef struct ArpTag
 typedef struct ArpResult
 {
     ArpTag* result;
-    unsigned int counter;
+    unsigned long counter;
 } ArpResult;
 
 struct String
 {
     char *string;
-    int length;
+    size_t length;
     bool freed;
 };
 struct StringArray{
     struct String *strings;
-    int count;
+    unsigned long count;
     bool freed;
 };
 extern struct StringArray * get_dir_list(char *argv,int argc);

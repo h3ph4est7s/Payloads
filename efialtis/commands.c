@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include "commands.h"
 #include "dbg.h"
+#include <errno.h>
 
 ArpResult* get_arp(char *argv,int argc)
 {
@@ -69,7 +70,6 @@ int free_str_array(struct StringArray *array){
 }
 struct StringArray * get_dir_list(char *argv,int argc){
     DIR *d = NULL;
-    char dirnotfounderr[] = "Directory not found.";
     struct StringArray *err;
 
     if(argc == 0){
@@ -107,8 +107,7 @@ struct StringArray * get_dir_list(char *argv,int argc){
             out->strings[count].string = malloc(sizeof(char)*(dirlen+1));
             check_mem(out->strings[count].string);
             strcpy(out->strings[count].string,dir->d_name);
-            out->strings[count].length = (int) dirlen;
-            printf("%s\n", dir->d_name);
+            out->strings[count].length = (size_t) dirlen;
             count++;
             out->count++;
             firstrun = false;
@@ -118,16 +117,19 @@ struct StringArray * get_dir_list(char *argv,int argc){
     return out;
 
     error:
-        switch(errno){
-            case DIR_N_FOUND_ERROR:
+        switch(error_code){
+            case ENOENT:
+                error_message = strerror(ENOENT);
+                error_message_len = strlen(error_message);
                 check_mem(err = malloc(sizeof(struct StringArray)));
                 check_mem(err->strings = malloc(sizeof(struct String)));
                 err->count = 1;
-                check_mem(err->strings[0].string = malloc(sizeof(char) * (strlen(dirnotfounderr)+1)));
-                strcpy(err->strings[0].string,dirnotfounderr);
-                err->strings[0].length = (int) strlen(dirnotfounderr);
+                check_mem(err->strings[0].string = malloc(sizeof(char) * (error_message_len+1)));
+                strcpy(err->strings[0].string,error_message);
+                err->strings[0].length = (size_t) error_message_len;
                 return err;
         }
         free_str_array(out);
+        set_zero_errno();
         return NULL;
 }
