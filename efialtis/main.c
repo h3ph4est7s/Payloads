@@ -6,7 +6,10 @@
 #include <stdint.h>
 #include <netinet/in.h>
 #include <strings.h>
+#include <arpa/inet.h>
 #include "config.h"
+#include <sys/socket.h>
+#include <ctype.h>
 
 #ifdef DAEMON
 #include <sys/stat.h>
@@ -16,8 +19,105 @@
 #include "main.h"
 #include "dbg.h"
 
+//TODO put SIGTERM cleanup function
 
 int sockfd, newsockfd;
+
+void PREFIX_pivot(char *argv, int argc){
+    struct PivotInput in;
+    char* pch = NULL;
+    char* atk = NULL;
+    char* atk_token = NULL;
+    char* target = NULL;
+    char* target_token = NULL;
+    char def[] = "Pivot command usage: pivot attacker_ip:port target_ip:port\n";
+
+    if(argc < 2 || argc > 2){
+        check_socket_write(write(newsockfd, &def, strlen(def)));
+        return;
+    }
+    pch = strtok(argv, " ");
+    for (unsigned int argv_counter = 0;argv_counter < 2;argv_counter++)                                    //iterate over pch 2 times to get the right number of arguments
+    {
+        if (argv_counter == 0) {
+            check_mem(atk = malloc(strlen(pch) + 1));
+            /* Copy attacker ip:port */
+            strcpy(atk, pch);
+        }
+        else if (argv_counter == 1) {
+            check_mem(target = malloc(strlen(pch) + 1));
+            /* Copy target ip:port */
+            strcpy(target, pch);
+        }
+        pch = strtok(NULL, " ");
+
+    }
+    //TODO Convert repeated code to function
+    atk_token = strtok(atk,":");
+    for (unsigned int attacker_counter = 0; attacker_counter < 2; attacker_counter++){
+        if(atk_token == NULL){
+            set_zero_errno();
+            log_warn("Attacker argument format error");
+            goto error;
+        }
+        if(attacker_counter == 0) {
+            if (inet_pton(AF_INET, atk_token, &in.atk_ip) != 1) {
+                set_zero_errno();
+                log_warn("Attacker ip not valid");
+                goto error;
+            }
+        }
+        if(attacker_counter == 1) {
+            long int atk_port = strtol(atk_token, NULL, 10);
+            if (errno == ERANGE || atk_port == 0) {
+                set_zero_errno();
+                log_warn("Attacker port not valid");
+                goto error;
+            }
+            else {
+                in.atk_port = htons((uint16_t) atk_port);
+            }
+        }
+        atk_token = strtok(NULL,":");
+    }
+    target_token = strtok(target,":");
+    for (unsigned int target_counter = 0; target_counter < 2; target_counter++){
+        if(target_token == NULL){
+            set_zero_errno();
+            log_warn("Target argument format error");
+            goto error;
+        }
+        if(target_counter == 0) {
+            if (inet_pton(AF_INET, target_token, &in.vktm_ip) != 1) {
+                set_zero_errno();
+                log_warn("Target ip not valid");
+                goto error;
+            }
+        }
+        if(target_counter == 1) {
+            long int target_port = strtol(target_token, NULL, 10);
+            if (errno == ERANGE || target_port == 0) {
+                set_zero_errno();
+                log_warn("Target port not valid");
+                goto error;
+            }
+            else {
+                in.vktm_port = htons((uint16_t) target_port);
+            }
+        }
+        target_token = strtok(NULL,":");
+    }
+    pivot(&in);
+    free(atk);
+    free(target);
+
+    return;
+
+    error:
+        if(atk) free(atk);
+        if(target) free(target);
+        return;
+}
 
 void PREFIX_ext(char *argv, int argc) {
     close(newsockfd);
@@ -34,12 +134,11 @@ void PREFIX_ls(char *argv, int argc) {
     return;
 
     error:
-    if (result) free_str_array(result);
-    return;
+        return;
 }
 
 void PREFIX_arp(char *argv, int argc) {
-    ArpResult *resulthole = get_arp(NULL, 1);
+    ArpResult *resulthole = get_arp(NULL, 0);
     ArpTag *out = resulthole->result;
     unsigned long cnt = resulthole->counter;
     ArpTag *outobj;
@@ -74,7 +173,8 @@ unsigned int cntargs(char *string)               //space delimited arguments cou
     char *pch;                          //delimited token pointer
     char *buffin;                       //temporary buffer to slice pointer
     unsigned int count = 0;                      //arguments counter
-    check_mem(buffin = malloc(strlen(string) + 1));  //allocate memory equal to length of string plus one
+    buffin = malloc(strlen(string) + 1);
+    check_mem(buffin);  //allocate memory equal to length of string plus one
     strcpy(buffin,
            string);                                 //copy contents of string limited by size of string to buffin
     pch = strtok(buffin,
@@ -88,7 +188,7 @@ unsigned int cntargs(char *string)               //space delimited arguments cou
     return count;                                          //return the count result
 
     error:
-    return NULL;
+        return 0;
 }
 
 void my_switch(char *string) {
@@ -97,7 +197,8 @@ void my_switch(char *string) {
             {
                     {"exit", PREFIX_ext},
                     {"arp",  PREFIX_arp},
-                    {"ls",   PREFIX_ls}
+                    {"ls",   PREFIX_ls},
+                    {"pivot", PREFIX_pivot}
             };
     char *e;
     size_t index;
@@ -283,7 +384,7 @@ int main(int argc, char *argv[]) {
             n = read(newsockfd, &buffer, 255);          // read data from established connection
 
             if (n <= 0) {
-                perror("ERROR reading from socket");    // if something is wrong with reading
+                log_err("ERROR reading from socket");    // if something is wrong with reading
                 break;                                  // break the loop kai listen for new connection
             }
             strtok(buffer, "\n");             // if newline has company remove it

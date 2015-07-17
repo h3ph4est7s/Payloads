@@ -7,7 +7,7 @@
 #ifdef NDEBUG
 #define debug(M, ...)
 #else
-#define debug(M, ...) fprintf(stderr, "DEBUG %s:%d: " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#define debug(M, ...) fprintf(stderr, "DEBUG %s:%d: "M"\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #endif
 
 #define set_zero_errno() errno = 0
@@ -25,7 +25,7 @@
 #define check_mem(A) check((A), "Out of memory.")
 #define check_debug(A, M, ...) if(!(A)) { debug(M, ##__VA_ARGS__); error_code=errno; errno=0; goto error; }
 #define check_socket_write(A) if(A <= 0) { log_err("ERROR writing to socket"); error_code=errno; errno=0; goto error;}
-#define check_dir_open(A) if(!(A)) { log_err("Directory not exist."); error_code=errno; errno=0; goto error;}
+#define check_dir_open(A) if(!(A)) { log_err("Cannot open directory."); error_code=errno; errno=0; goto error;}
 
 int error_code;
 char *error_message;
