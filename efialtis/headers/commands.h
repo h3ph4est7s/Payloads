@@ -25,12 +25,10 @@ struct String
 {
     char *string;
     size_t length;
-    bool freed;
 };
 struct StringArray{
     struct String *strings;
     unsigned long count;
-    bool freed;
 };
 struct PivotInput{
     struct in_addr atk_ip;
@@ -41,6 +39,6 @@ struct PivotInput{
 extern struct StringArray * get_dir_list(char *argv,int argc);
 extern ArpResult* get_arp(char *argv,int argc);
 extern int free_str_array(struct StringArray *array);
-extern int pivot(struct PivotInput *input);
-
+extern void* pivot(void *pinput);
+extern int kill_pivot();
 #endif // COMMANDS_H_INCLUDED
