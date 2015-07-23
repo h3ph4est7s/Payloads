@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 
-volatile int close_pipe = NULL;
+volatile int close_pipe[2] = {0,0};
 
 ArpResult *get_arp(char *argv, int argc) {
     char line[500];                         // create a temporary line with 500 bytes limit
@@ -185,7 +185,7 @@ void* pivot(void *pinput) {
     }
 
     int select_ret = 0;
-    if (pipe(&close_pipe) == -1) {
+    if (pipe(close_pipe) == -1) {
         log_err("pipe creation failed");
         set_zero_errno();
         goto error;
@@ -196,22 +196,17 @@ void* pivot(void *pinput) {
         FD_ZERO(&sockets);
         FD_SET((unsigned int)attacker_sockfd,&sockets);
         FD_SET((unsigned int)target_sockfd,&sockets);
-        FD_SET((unsigned int)close_pipe,&sockets);
+        FD_SET((unsigned int)close_pipe[0],&sockets);
         memset((char *)&buffer,0, BUFFER_SIZE);
-        if((attacker_sockfd < target_sockfd) && (target_sockfd > close_pipe)){
-            select_ret = select(target_sockfd+1,&sockets,NULL,NULL,NULL);
-        }
-        else if((attacker_sockfd > target_sockfd) && (attacker_sockfd > close_pipe)){
-            select_ret = select(attacker_sockfd+1,&sockets,NULL,NULL,NULL);
-        }
-        else{
-            select_ret = select(close_pipe+1,&sockets,NULL,NULL,NULL);
-        }
+
+        select_ret = select(close_pipe[1]+1,&sockets,NULL,NULL,NULL);
+
         if(select_ret == -1){
             log_err("Broken pipe");
             set_zero_errno();
             goto error;
         }
+        close(close_pipe[0]);
         if(FD_ISSET(attacker_sockfd,&sockets)){
             n = read(attacker_sockfd,&buffer,BUFFER_SIZE-1);
             if (n <= 0) {
@@ -248,6 +243,7 @@ void* pivot(void *pinput) {
     if (attacker_sockfd) close(attacker_sockfd);
     if (target_sockfd) close(target_sockfd);
     free(input);
+    return NULL;
 
 
     error:
@@ -258,11 +254,12 @@ void* pivot(void *pinput) {
     return NULL;
 }
 int kill_pivot(){
-        if(close_pipe){
+        if(close_pipe[0] && close_pipe[1]){
             char* sig = "1";
-            if(write(close_pipe,&sig,1) < 0){
+            if(write(close_pipe[1],&sig,1) < 0){
                 return -1;
             }
+            close(close_pipe[1]);
             return 0;
         }
         else{
