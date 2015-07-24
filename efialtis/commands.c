@@ -206,7 +206,6 @@ int pivot(void *pinput) {
             set_zero_errno();
             goto error;
         }
-        close(close_pipe[0]);
         if(FD_ISSET(attacker_sockfd,&sockets)){
             n = read(attacker_sockfd,&buffer,BUFFER_SIZE-1);
             if (n <= 0) {
@@ -240,6 +239,7 @@ int pivot(void *pinput) {
         }
     }
 
+    close(close_pipe[0]);
     if (attacker_sockfd) close(attacker_sockfd);
     if (target_sockfd) close(target_sockfd);
     free(input);
@@ -250,6 +250,7 @@ int pivot(void *pinput) {
     if (attacker_sockfd) close(attacker_sockfd);
     if (target_sockfd) close(target_sockfd);
     if(input) free(input);
+    pivot_running = false;
 
     return -1;
 }
