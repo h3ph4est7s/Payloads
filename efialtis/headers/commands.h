@@ -39,6 +39,7 @@ struct PivotInput{
 extern struct StringArray * get_dir_list(char *argv,int argc);
 extern ArpResult* get_arp(char *argv,int argc);
 extern int free_str_array(struct StringArray *array);
-extern void* pivot(void *pinput);
+extern int pivot(void *pinput);
 extern int kill_pivot();
+bool pivot_running;
 #endif // COMMANDS_H_INCLUDED

