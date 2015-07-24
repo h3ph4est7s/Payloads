@@ -26,6 +26,7 @@
 #define check_debug(A, M, ...) if(!(A)) { debug(M, ##__VA_ARGS__); error_code=errno; errno=0; goto error; }
 #define check_socket_write(A) if(A <= 0) { log_err("ERROR writing to socket"); error_code=errno; errno=0; goto error;}
 #define check_dir_open(A) if(!(A)) { log_err("Cannot open directory."); error_code=errno; errno=0; goto error;}
+#define COUNT(x)  (sizeof(x) / sizeof((x)[0]))
 
 int error_code;
 char *error_message;

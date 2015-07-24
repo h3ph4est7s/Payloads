@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 
-volatile int close_pipe[2] = {0,0};
+int close_pipe[2] = {0,0};
 
 ArpResult *get_arp(char *argv, int argc) {
     char line[500];                         // create a temporary line with 500 bytes limit

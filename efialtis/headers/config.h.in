@@ -7,5 +7,6 @@
 //#define DAEMON
 
 #define PRINT_VERSION(FD) \
-            fprintf(FD,"Version: %d.%d\n",Efialtis_VERSION_MAJOR,Efialtis_VERSION_MINOR);
+            fprintf(FD,"Version: %d.%d\n",Efialtis_VERSION_MAJOR,Efialtis_VERSION_MINOR)
+#define CURSOR "->"
 #endif //EFIALTIS_CONFIG_H

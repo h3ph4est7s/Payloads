@@ -23,6 +23,16 @@
 int sockfd, newsockfd;
 pthread_t pivot_thread_id = NULL;
 
+struct commandcase cases[] =
+        {
+                {"exit",  PREFIX_ext, ": kill client connection."},
+                {"arp",   PREFIX_arp,": show local system arp table."},
+                {"ls",    PREFIX_ls,": list the contents of local or user specified directory."},
+                {"pivot", PREFIX_pivot,": make a pivot connection using this machine as a node."},
+                {"kill",  PREFIX_kill,": kill our self or pivot."},
+                {"help",  PREFIX_help,": this message."}
+        };
+
 void* pivot_thread(void *pinput){
     if(pivot(pinput) < 0){
         check_socket_write(write(newsockfd, "pivot creation problem!\n", 24));
@@ -210,8 +220,26 @@ void PREFIX_kill(char *argv, int argc) {
             exit(0);
         }
     }
+    else{
+        check_socket_write(write(newsockfd, "kill self: kill this proccess.\nkill pivot: kill running pivot.\n", 63));
+    }
     error:
     return;
+}
+
+void PREFIX_help(char *argv, int argc){
+    check_socket_write(write(newsockfd, "\nHelp:\n\n", 8));
+    for(unsigned int cnt = 0; cnt < COUNT(cases); cnt++){
+        check_socket_write(write(newsockfd, cases[cnt].string, strlen(cases[cnt].string)));
+        check_socket_write(write(newsockfd, cases[cnt].help, strlen(cases[cnt].help)));
+        check_socket_write(write(newsockfd, "\n", 1));
+    }
+
+    return;
+
+    error:
+        return;
+
 }
 
 unsigned int cntargs(char *string)               //space delimited arguments counter
@@ -239,14 +267,6 @@ unsigned int cntargs(char *string)               //space delimited arguments cou
 
 void my_switch(char *string) {
 
-    struct commandcase cases[] =
-            {
-                    {"exit",  PREFIX_ext},
-                    {"arp",   PREFIX_arp},
-                    {"ls",    PREFIX_ls},
-                    {"pivot", PREFIX_pivot},
-                    {"kill",  PREFIX_kill}
-            };
     char *e;
     size_t index;
     char *command;
@@ -270,8 +290,10 @@ void my_switch(char *string) {
         command = string;
     }
     unsigned int cntargs_ret;
+    bool found = false;
     for (struct commandcase *pCase = cases; pCase != cases + sizeof(cases) / sizeof(cases[0]); pCase++) {
         if (0 == strcmp(pCase->string, command)) {
+            found = true;
             if (e == NULL) {
                 (*pCase->func)(e, 0);
                 break;
@@ -287,6 +309,13 @@ void my_switch(char *string) {
         }
     }
     if (allocated) free(command);
+    if(!found){
+        check_socket_write(write(newsockfd,"command not found.\n",19));
+    }
+    return;
+
+    error:
+        return;
 
 }
 
@@ -418,17 +447,17 @@ int main(int argc, char *argv[]) {
             log_err("ERROR writing to socket"); // log error
             continue;                           // restart the loop
         }
-        FILE *fd = fdopen(dup(newsockfd),
-                          "w"); // create a duplicate socket converted after to file descriptor to use fprintf
-        n = PRINT_VERSION(
-                    fd)                   // macro with fprintf version information, referenced information can be found in config.h.in
+        /* create a duplicate socket converted after to file descriptor to use fprintf */
+        FILE *fd = fdopen(dup(newsockfd), "w");
+        /* macro with fprintf version information, referenced information can be found in config.h.in*/
+        n = PRINT_VERSION(fd);
         fflush(fd);                             // flush the descriptor
         fclose(fd);                             // close and cleanup
         if (n <= 0) {                           // if we had an error with write
             log_err("ERROR writing to socket"); // log error
             continue;                           // restart the loop
         }
-
+        n = write(newsockfd,CURSOR,strlen(CURSOR));
         while (true) {                          // endless loop to receive commands
             bzero(&buffer, 256);                // fill the used buffer with zero
             n = read(newsockfd, &buffer, 255);          // read data from established connection
@@ -439,9 +468,19 @@ int main(int argc, char *argv[]) {
             }
             strtok(buffer, "\n");             // if newline has company remove it
             if (strcmp(buffer, "\n") == 0) { // check if input is only new line
+                n = write(newsockfd,CURSOR,strlen(CURSOR));
+                if (n <= 0) {                           // if we had an error with write
+                    log_err("ERROR writing to socket"); // log error
+                    break;                           // exit the loop
+                }
                 continue;                   // if true listen for new command
             }
             my_switch(buffer);              // if we have text ti process call the processing function
+            n = write(newsockfd,CURSOR,strlen(CURSOR));
+            if (n <= 0) {                           // if we had an error with write
+                log_err("ERROR writing to socket"); // log error
+                break;                           // exit the loop
+            }
 
         }
         close(newsockfd);
